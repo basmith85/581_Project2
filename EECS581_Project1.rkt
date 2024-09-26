@@ -439,27 +439,57 @@ Date Created: 8/28/24
 
       ;; Draw Ship Placement State
       [(eq? currentState ship-placement)
-       (color 7) ; Set color to white
-       (font wide-font) ; Set font size
-       (text 175 50 (format "Player ~a, Place Your Ships! Press LEFT arrow to toggle orientation." current-player)) ; Draw header text
+  (color 7) ; Set color to white
+  (font wide-font) ; Set font size
+  (text 175 50 (format "Player ~a, Place Your Ships! Press LEFT arrow to toggle orientation." current-player)) ; Draw header text
 
-       ;; Determine which board to draw for the current player
-       (define current-board (if (= current-player 1) player1-board player2-board)) ; Select current player's board
+  ;; Determine which board to draw for the current player
+  (define current-board (if (= current-player 1) player1-board player2-board)) ; Select current player's board
 
-       ;; Draw the grid
-       (draw-grid x-offset y-offset current-board #t) ; Draw grid showing ships
+  ;; Draw the grid
+  (draw-grid x-offset y-offset current-board #t) ; Draw grid showing ships
 
-       ;; Draw Start Game button after all ships placed for the current player
+  ;; highlight where ships will be placed
+  (let* ((mouseX (mouse-x))
+         (mouseY (mouse-y))
+         (adjusted-y-offset (+ y-offset 20))
+         (board-pos (mouse-to-board mouseX mouseY x-offset adjusted-y-offset))
+         (get-ships-placed (if (= current-player 1) player1-ships-placed player2-ships-placed)))
+    (when (< get-ships-placed num-ships)
+      (let ((current-ship-size (list-ref ship-sizes get-ships-placed)))
+        (when board-pos
+          (let* ((row (car board-pos))
+                 (col (cdr board-pos))
+                 ;; Check if ship can be placed
+                 (can-place (can-place-ship? current-board row col current-ship-size ship-orientation)))
+            ;; Set color based on can-place
+            (color (if can-place 11 8)) ;; 11: green, 8: red
+            ;; Draw the ship outline
+            (for ([i (in-range current-ship-size)])
+              (let ((cell-row (if (eq? ship-orientation 'horizontal) row (+ row i)))
+                    (cell-col (if (eq? ship-orientation 'horizontal) (+ col i) col)))
+                ;; Check if cell is within bounds
+                (when (and (>= cell-row 0) (< cell-row boardSize)
+                           (>= cell-col 0) (< cell-col boardSize))
+                  ;; Calculate cell position in pixels
+                  (let ((cell-x (+ x-offset (* cell-col cellSize)))
+                        (cell-y (+ y-offset (* cell-row cellSize))))
+                    ;; Draw rectangle
+                    (rect cell-x cell-y cellSize cellSize #:fill #t))))))))))
+
+  ;;---------------------------------------------------------------------------------
+
+  ;; Draw Start Game button after all ships placed for the current player
        (when (= (if (= current-player 1) player1-ships-placed player2-ships-placed) num-ships) ; If all ships placed
-         (color 7) ; Set color to white
-         (rect 300 750 button-width button-height #:fill #t) ; Draw Start Game button
-         (color 0) ; Set color to black for text
-         (center-text 300 775 button-width "Start Game")) ; Draw centered text on button
+    (color 7) ; Set color to white
+    (rect 300 750 button-width button-height #:fill #t) ; Draw Start Game button
+    (color 0) ; Set color to black for text
+    (center-text 300 775 button-width "Start Game")) ; Draw centered text on button
 
-       ;; Draw Revert button
-       (color 7) ; Set color to white
-       (rect 300 650 button-width button-height #:fill #t) ; Draw Revert button
-       (color 0) ; Set color to black for text
+  ;; Draw Revert button
+  (color 7) ; Set color to white
+  (rect 300 650 button-width button-height #:fill #t) ; Draw Revert button
+  (color 0) ; Set color to black for text
        (center-text 300 675 button-width "Revert Ship")] ; Draw centered text on button
 
       ;; Draw In-Play State
