@@ -1,70 +1,50 @@
-#|
-------------------Prologue--------------------
-Program Name: EECS581_Project1
-Description: Racket based Battleship game using the R-Cade game engine. Players can play against a random guessing AI or PvP Pass and Play. 
-
-Reqiruments: Dr.Racket IDE (https://racket-lang.org)
-Libraries: R-Cade (https://r-cade.io)
-R-Cade Documentation: https://docs.racket-lang.org/r-cade/index.html
-
-Current Bug: After implmenting 2-Player, the Player vs. AI gameplay is not working properly. It swaps
-the boards like it's a pass and play game. In the push history, the "Game Over" push has a
-function Player vs. AI implementation.
-
-Input: Mouse and Key input in order to manage/play the game
-Output:
-	- Displays a 800x900 window with the running battleship game. It will always start at the home state
-
-Author: Darshil Patel
-Date Created: 9/26/24
---------------------------------------------
-|#
-
-
-
 #lang racket
-(require r-cade) ; Import R-Cade library for game development
-(require racket/match) ; Import match library for pattern matching
+(require r-cade)
+(require racket/match)
 
 ;;-------------Initialization---------------;;
 
 ;; Define States
-(define home 0) ; Main Menu State
-(define game-mode-selection 1) ; State to select Player vs Player or Player vs AI
-(define select-ai-difficulty 2) ; State to select AI difficulty
-(define ship-selection 3) ; State to select the number of ships
-(define ship-placement 4) ; State to place ships on the board
-(define in-play 5) ; Game is running
-(define game-over 6) ; Game over state, if all ships are hit
+(define home 0)
+(define game-mode-selection 1)
+(define select-ai-difficulty 2)
+(define ship-selection 3)
+(define ship-placement 4)
+(define in-play 5)
+(define game-over 6)
+(define help-screen 7) ; Added Help Screen State
 
 ;; Declare Variables
-(define boardSize 10) ; Dimension of the board (10x10 grid)
-(define cellSize 40) ; Pixel size of individual cells on the board
-(define x-offset 200) ; X offset for drawing the grid
-(define y-offset 200) ; Y offset for drawing the grid
-(define button-width 160) ; Width of buttons in pixels
-(define button-height 60) ; Height of buttons in pixels
-(define currentState home) ; Current state of the game, starting at the main menu
-(define num-ships 0) ; Number of ships chosen by the player
-(define opponent-y-offset 50) ; Y offset for the opponent's grid
-(define player-y-offset 465) ; Y offset for the player's grid
-(define playerTurn 0) ; 1 for Player 1's turn, 2 for Player 2's turn, 0 for AI's turn
-(define game-mode '2-player) ; Default game mode is 2-player
-(define player1-ships-placed 0) ; Number of ships placed by Player 1
-(define player2-ships-placed 0) ; Number of ships placed by Player 2
-(define current-player 1) ; Tracks the current player (1 or 2)
-(define ai-difficulty 'easy) ; Default AI difficulty is easy
+(define boardSize 10)
+(define cellSize 40)
+(define x-offset 200)
+(define y-offset 200)
+(define button-width 160)
+(define button-height 60)
+(define currentState home)
+(define previousState home)
+(define num-ships 0)
+(define opponent-y-offset 50)
+(define player-y-offset 465)
+(define playerTurn 0) ; 1 for Player 1, 2 for Player 2, 0 for AI
+(define game-mode '2-player)
+(define player1-ships-placed 0)
+(define player2-ships-placed 0)
+(define current-player 1)
+(define ai-difficulty 'easy)
+(define previousMouseState #f) ; For detecting mouse clicks
+(define ai-hit-cells '()) ; For hard AI
 
 ;; Track ship sizes and placements
-(define ship-sizes '()) ; List of ship sizes
-(define ships-placed-locations '()) ; List of ship locations on the board
-(define ship-orientation 'horizontal) ; Default ship orientation is horizontal
+(define ship-sizes '())
+(define ships-placed-locations '())
+(define ship-orientation 'horizontal)
 
 ;; Variables for Special Shooting Feature
 (define player1-special-shots 3)
 (define player2-special-shots 3)
 (define special-shot-active #f)
-(define special-shot-type #f) ; 'row' or 'column'
+(define special-shot-type #f)
 
 ;; Initialize a board with vectors using a given size
 (define (createBoard size)
@@ -292,6 +272,15 @@ Date Created: 9/26/24
          (mouseY (mouse-y))
          (mouseClicked (btn-mouse)))
     (cond
+      ;; Check for help key
+      [(btn-right)
+       (set! previousState currentState)
+       (set! currentState help-screen)]
+      ;; Help Screen State
+      [(eq? currentState help-screen)
+       ;; Return to previous state on mouse click
+       (when mouseClicked
+         (set! currentState previousState))]
       ;; Home state - transition to game mode selection or exit
       [(eq? currentState home)
        ;; Start Game Button
@@ -320,16 +309,19 @@ Date Created: 9/26/24
        (when (and (mouse-in? mouseX mouseY 300 400 button-width button-height)
                   mouseClicked)
          (set! ai-difficulty 'easy)
+         (set! player1-special-shots 1)
          (set! currentState ship-selection))
        ;; Medium AI Button
        (when (and (mouse-in? mouseX mouseY 300 500 button-width button-height)
                   mouseClicked)
          (set! ai-difficulty 'medium)
+         (set! player1-special-shots 3)
          (set! currentState ship-selection))
        ;; Hard AI Button
        (when (and (mouse-in? mouseX mouseY 300 600 button-width button-height)
                   mouseClicked)
          (set! ai-difficulty 'hard)
+         (set! player1-special-shots 5)
          (set! currentState ship-selection))]
       ;; Ship Selection State
       [(eq? currentState ship-selection)
@@ -391,6 +383,29 @@ Date Created: 9/26/24
              (set! player2-ships-placed (- player2-ships-placed 1))))]
       ;; In-Play State
       [(eq? currentState in-play)
+       ;; Check for special shot activation
+       (when (and (btn-up "s")
+                  (not special-shot-active)
+                  (> (if (= playerTurn 1) player1-special-shots player2-special-shots) 0))
+         (set! special-shot-active #t)
+         (printf "Special shot activated! Click on the opponent's grid to use it.~n"))
+       ;; Exit Game Key
+       (when (btn-down "escape")
+         ;; Reset the game to the home state
+         (set! currentState home)
+         ;; Reset variables
+         (set! player1-board (createBoard boardSize))
+         (set! player2-board (createBoard boardSize))
+         (set! opponentBoard (createBoard boardSize))
+         (set! player1-ships-placed 0)
+         (set! player2-ships-placed 0)
+         (set! current-player 1)
+         (set! ships-placed-locations '())
+         (set! ship-orientation 'horizontal)
+         (set! player1-special-shots 3)
+         (set! player2-special-shots 3)
+         (set! special-shot-active #f)
+         (set! special-shot-type #f))
        (cond
          ;; If it's Player 1's turn
          [(= playerTurn 1)
@@ -438,11 +453,14 @@ Date Created: 9/26/24
                 (when (check-game-over player1-board)
                   (printf "Opponent wins! All your ships are hit!~n")
                   (set! currentState game-over))
-                ;; Switch back to Player's turn
-                (set! playerTurn 1)))])]
+                ;; Switch back to Player's turn if game not over
+                (unless (eq? currentState game-over)
+                  (set! playerTurn 1))))])]
       ;; Game Over State
       [(eq? currentState game-over)
-       (when mouseClicked
+       ;; Exit to Main Menu Button
+       (when (and (mouse-in? mouseX mouseY 300 400 button-width button-height)
+                  mouseClicked)
          ;; Reset the game to the home state
          (set! currentState home)
          ;; Reset variables
@@ -457,7 +475,28 @@ Date Created: 9/26/24
          (set! player1-special-shots 3)
          (set! player2-special-shots 3)
          (set! special-shot-active #f)
-         (set! special-shot-type #f))])))
+         (set! special-shot-type #f))
+       ;; Restart Game Button
+       (when (and (mouse-in? mouseX mouseY 300 500 button-width button-height)
+                  mouseClicked)
+         ;; Reset variables to start a new game
+         (set! currentState game-mode-selection)
+         (set! player1-board (createBoard boardSize))
+         (set! player2-board (createBoard boardSize))
+         (set! opponentBoard (createBoard boardSize))
+         (set! player1-ships-placed 0)
+         (set! player2-ships-placed 0)
+         (set! current-player 1)
+         (set! ships-placed-locations '())
+         (set! ship-orientation 'horizontal)
+         (set! player1-special-shots 3)
+         (set! player2-special-shots 3)
+         (set! special-shot-active #f)
+         (set! special-shot-type #f))
+       ;; Exit Game Button
+       (when (and (mouse-in? mouseX mouseY 300 600 button-width button-height)
+                  mouseClicked)
+         (exit))])))
 
 ;; Function to approximate text centering horizontally
 (define (center-text x y width text-str)
@@ -471,6 +510,19 @@ Date Created: 9/26/24
   (begin
     (cls)
     (cond
+      ;; Help Screen
+      [(eq? currentState help-screen)
+       (font wide-font)
+       (color 7)
+       (text 50 50 "Help and Instructions:")
+       (text 50 100 "1. Use the mouse to interact with the game.")
+       (text 50 130 "2. During ship placement, click on the grid to place ships.")
+       (text 50 160 "   - Press LEFT arrow to toggle ship/shot orientation.")
+       (text 50 190 "3. During your turn, click on the opponent's grid to attack.")
+       (text 50 220 "4. Press 'up arrow key' to activate a special shot if available.")
+       (text 50 250 "   - Special shot will target an entire row and column.")
+       (text 50 280 "5. Press 'right arrow key' at any time to view this help screen.")
+       (text 50 310 "6. Press 'down arrow key' at any time to go to previous screen or open menu.")]
       ;; Draw Home Menu
       [(eq? currentState home)
        (color 7)
@@ -486,7 +538,6 @@ Date Created: 9/26/24
       ;; Draw Game Mode Selection
       [(eq? currentState game-mode-selection)
        (color 7)
-       (font wide-font)
        (text 315 100 "Select Game Mode")
        ;; Draw Player vs A.I. button
        (rect 300 200 button-width button-height #:fill #t)
@@ -519,7 +570,7 @@ Date Created: 9/26/24
       ;; Draw Ship Selection Screen
       [(eq? currentState ship-selection)
        (color 0)
-       (font tall-font)
+       (font wide-font)
        (text 20 20 "Select the number of ships:")
        (for ([i (in-range 5)])
          (let ((option-y (+ 60 (* i 50))))
@@ -558,6 +609,10 @@ Date Created: 9/26/24
       [(eq? currentState in-play)
        (font wide-font)
        (text 20 20 (if (= playerTurn 1) "Player 1's Turn" (if (eq? game-mode '2-player) "Player 2's Turn" "Opponent's Turn")))
+       ;; Show special shots remaining
+       (font wide-font)
+       (text 20 60 (format "Special Shots Remaining: ~a"
+                           (if (= playerTurn 1) player1-special-shots player2-special-shots)))
        ;; Draw the boards based on the current turn
        (if (= playerTurn 1)
            (begin
@@ -583,22 +638,33 @@ Date Created: 9/26/24
        (font wide-font)
        (color 7)
        (text 300 100 "Game Over!")
-       (text 300 200 (if (= playerTurn 1) (if (eq? game-mode '1-player-vs-ai) "You Lose!" "Player 2 Wins!") (if (eq? game-mode '1-player-vs-ai) "You Win!" "Player 1 Wins!")))
-       (text 300 300 "Click anywhere to return to the main menu.")])))
+       (text 300 200 (if (or (and (= playerTurn 1) (eq? game-mode '1-player-vs-ai))
+                             (and (= playerTurn 2) (eq? game-mode '2-player)))
+                         "You Lose!" "You Win!"))
+       ;; Draw buttons
+       (color 7)
+       ;; Exit to Main Menu Button
+       (rect 300 400 button-width button-height #:fill #t)
+       (color 0)
+       (center-text 300 425 button-width "Main Menu")
+       ;; Restart Game Button
+       (color 7)
+       (rect 300 500 button-width button-height #:fill #t)
+       (color 0)
+       (center-text 300 525 button-width "Restart Game")
+       ;; Exit Game Button
+       (color 7)
+       (rect 300 600 button-width button-height #:fill #t)
+       (color 0)
+       (center-text 300 625 button-width "Exit Game")])))
 
 ;;-------------Run Game---------------;;
-;; Game loop function calls both update and draw state each frame
 (define (game-loop)
   (begin
     (update currentState)
     (draw currentState)))
 
-;; Start the game loop
 (run game-loop
-     800 ; Width of the window
-     900 ; Height of the window
-     #:fps 60) ; Set the frame rate to 60 FPS
-
      800 ; Width of the window
      900 ; Height of the window
      #:fps 60) ; Set the frame rate to 60 FPS
