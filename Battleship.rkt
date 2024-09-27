@@ -1,3 +1,18 @@
+#|
+------------------Prologue--------------------
+Program Name: EECS581_Project2
+Description: Racket based Battleship game using the R-Cade game engine. Players can play against a random guessing AI or PvP Pass and Play. 
+Reqiruments: Dr.Racket IDE (https://racket-lang.org)
+Libraries: R-Cade (https://r-cade.io)
+R-Cade Documentation: https://docs.racket-lang.org/r-cade/index.html
+Input: Mouse and Key input in order to manage/play the game
+Output:
+	- Displays a 800x900 window with the running battleship game. It will always start at the home state
+Author: Darshil Patel
+Date Created: 9/26/24
+--------------------------------------------
+|#
+
 #lang racket
 (require r-cade)
 (require racket/match)
