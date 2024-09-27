@@ -8,9 +8,8 @@ R-Cade Documentation: https://docs.racket-lang.org/r-cade/index.html
 
 Current bugs: the code is working but there are some issues that need to be fixed. take your time to do a thorough analysis and fix them:
 - the game doesnt stop after all the ships are hit on either players board.
-- once all the ships are hit by you or the opponent it should display a menu saying who won and also restart option, main menu or quit game.
-- the help window is not showing after the initial start game greeting anymore.
-- the down arrow key is still not working as intending to go back to previous screen. it just works when playing the game and takes you back to the starting screen. 
+- is the up key is pressed during a game, it does not exit help screen on clicking to resume the game it is stuck.
+- during a game, you cannot pause by clicking down key and open the menu that we get after the game finishes.
 
 Input: Mouse and Key input in order to manage/play the game
 Output:
