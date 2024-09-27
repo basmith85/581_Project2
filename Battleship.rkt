@@ -6,15 +6,16 @@ Reqiruments: Dr.Racket IDE (https://racket-lang.org)
 Libraries: R-Cade (https://r-cade.io)
 R-Cade Documentation: https://docs.racket-lang.org/r-cade/index.html
 
-Current bugs: the code is working but there are some issues that need to be fixed. 
-- When playing with AI, it displays "you win" even if the AI wins. 
+Current bugs: no known bugs atm, maybe after thorough testing. 
 
 Suggestions: 
 - Possibly add a "back button to navigate the menus"
 
 Input: Mouse and Key input in order to manage/play the game
+
 Output:
-	- Displays a 800x900 window with the running battleship game. It will always start at the home state
+- Displays a 800x900 window with the running battleship game. It will always start at the home state
+
 Author: Darshil Patel
 Date Created: 9/26/24
 --------------------------------------------
@@ -611,15 +612,16 @@ Date Created: 9/26/24
                         (when (check-game-over opponent-board opponent-total-parts)
                           (printf "Player 1 wins! All opponent's ships are hit!~n")
                           (set! currentState game-over))
-                        ;; Switch to Player 2's turn or AI's turn
-                        (set! playerTurn (if (eq? game-mode '2-player) 2 0)))
+                        ;; Only switch turn if game is not over
+                        (unless (eq? currentState game-over)
+                          (set! playerTurn (if (eq? game-mode '2-player) 2 0))))
                       ;; Else, normal shot
                       (if (or (eq? (vector-ref (vector-ref opponent-board (car board-pos))
                                                (cdr board-pos))
-                                    'hit)
+                                   'hit)
                               (eq? (vector-ref (vector-ref opponent-board (car board-pos))
                                                (cdr board-pos))
-                                    'miss))
+                                   'miss))
                           (printf "Cell was already guessed. Try a different one!~n")
                           (begin
                             (player-guess opponent-board mouseX mouseY)
@@ -627,8 +629,10 @@ Date Created: 9/26/24
                             (when (check-game-over opponent-board opponent-total-parts)
                               (printf "Player 1 wins! All opponent's ships are hit!~n")
                               (set! currentState game-over))
-                            ;; Switch to Player 2's turn or AI's turn
-                            (set! playerTurn (if (eq? game-mode '2-player) 2 0)))))))))]
+                            ;; Only switch turn if game is not over
+                            (unless (eq? currentState game-over)
+                              (set! playerTurn (if (eq? game-mode '2-player) 2 0))))))))))]
+
          ;; Player 2's turn
          [(and (= playerTurn 2) (eq? game-mode '2-player))
           ;; Handle clicks for Player 2's turn
@@ -927,15 +931,15 @@ Date Created: 9/26/24
                  (text 330 10 "Opponent is taking its turn...")
                  (draw-grid x-offset opponent-y-offset player1-board #f)
                  (draw-grid x-offset player-y-offset player1-board #t))))]
-      ;; Draw Game Over State
+      ;; Game Over State
       [(eq? currentState game-over)
        (font wide-font)
        (color 7)
        (text 300 100 "Game Over!")
        (text 300 200
              (cond
-               [(and (eq? game-mode '1-player-vs-ai) (= playerTurn 1)) "You Lose!"]
-               [(and (eq? game-mode '1-player-vs-ai) (= playerTurn 0)) "You Win!"]
+               [(and (eq? game-mode '1-player-vs-ai) (= playerTurn 0)) "You Lose!"]
+               [(and (eq? game-mode '1-player-vs-ai) (= playerTurn 1)) "You Win!"]
                [(and (eq? game-mode '2-player) (= playerTurn 1)) "Player 2 Wins!"]
                [(and (eq? game-mode '2-player) (= playerTurn 2)) "Player 1 Wins!"]))
        ;; Draw buttons
@@ -965,4 +969,3 @@ Date Created: 9/26/24
      800 ; Width of the window
      900 ; Height of the window
      #:fps 60) ; Set the frame rate to 60 FPS
-
