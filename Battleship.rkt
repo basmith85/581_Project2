@@ -39,26 +39,26 @@ Date Created: 9/26/24
 (define pause-menu 8)
 
 ;; Declare Variables
-(define currentState home)
+(define currentState home) ;Tracks the current state of the game
 (define stateStack '()) ; Stack for state management
-(define num-ships 0)
-(define opponent-y-offset 50)
-(define player-y-offset 465)
+(define num-ships 0) ; Number of ships for each player
+(define opponent-y-offset 50) ;Y-offset for opponent's board positioning
+(define player-y-offset 465) ;Y-offset for player's board positioning
 (define playerTurn 0) ; 1 for Player 1, 2 for Player 2, 0 for AI
-(define game-mode '2-player)
-(define player1-ships-placed 0)
-(define player2-ships-placed 0)
-(define current-player 1)
-(define ai-difficulty 'easy)
+(define game-mode '2-player) ;Game mode can be 2 player or AI
+(define player1-ships-placed 0) ;Track the number of ships placed by player 1
+(define player2-ships-placed 0) ;Track the number of ships placed by player 2
+(define current-player 1) ;Tracks which player is placing ships or taking actions
+(define ai-difficulty 'easy) ;AI difficulty level
 
 ;; Track ship sizes and placements
-(define ship-sizes '())
-(define ships-placed-locations '())
+(define ship-sizes '()) ; List to store ship sizes
+(define ships-placed-locations '()) ; List to track places ships on the board
 (define ship-orientation 'horizontal) ; Use for ship placement
 
 ;; Variables for Special Shooting Feature
-(define player1-special-shots 3)
-(define player2-special-shots 3)
+(define player1-special-shots 3) ;Special shots available for Player 1
+(define player2-special-shots 3) ;Special shots available for Player 2
 (define special-shot-active #f)
 (define special-shot-orientation 'horizontal) ; Use for special shots
 
@@ -67,9 +67,9 @@ Date Created: 9/26/24
 (define ai-target-cells '()) ; For medium AI targeting
 
 ;; Variables to Track Total Ship Parts
-(define player1-total-ship-parts 0)
-(define player2-total-ship-parts 0)
-(define opponent-total-ship-parts 0)
+(define player1-total-ship-parts 0) ;total ship parts for player 1
+(define player2-total-ship-parts 0) ;total ship parts for player 2
+(define opponent-total-ship-parts 0) ;total ship parts for AI
 
 ;; Initialize a board with vectors using a given size
 ;; Use symbols for cell states: 'empty, 'ship, 'hit, 'miss
@@ -80,8 +80,8 @@ Date Created: 9/26/24
     board))
 
 ;; Create boards/grids using the createBoard function
-(define boardSize 10)
-(define cellSize 40)
+(define boardSize 10) ;10x10 board
+(define cellSize 40) ;each cell is 40x40 pixels
 (define x-offset 200)
 (define y-offset 200)
 (define button-width 160)
