@@ -5,6 +5,13 @@ Description: Racket based Battleship game using the R-Cade game engine. Players 
 Reqiruments: Dr.Racket IDE (https://racket-lang.org)
 Libraries: R-Cade (https://r-cade.io)
 R-Cade Documentation: https://docs.racket-lang.org/r-cade/index.html
+
+Current bugs: the code is working but there are some issues that need to be fixed. take your time to do a thorough analysis and fix them:
+- the game doesnt stop after all the ships are hit on either players board.
+- once all the ships are hit by you or the opponent it should display a menu saying who won and also restart option, main menu or quit game.
+- the help window is not showing after the initial start game greeting anymore.
+- the down arrow key is still not working as intending to go back to previous screen. it just works when playing the game and takes you back to the starting screen. 
+
 Input: Mouse and Key input in order to manage/play the game
 Output:
 	- Displays a 800x900 window with the running battleship game. It will always start at the home state
