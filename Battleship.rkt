@@ -6,10 +6,11 @@ Reqiruments: Dr.Racket IDE (https://racket-lang.org)
 Libraries: R-Cade (https://r-cade.io)
 R-Cade Documentation: https://docs.racket-lang.org/r-cade/index.html
 
-Current bugs: the code is working but there are some issues that need to be fixed. take your time to do a thorough analysis and fix them:
-- the game doesnt stop after all the ships are hit on either players board.
-- is the up key is pressed during a game, it does not exit help screen on clicking to resume the game it is stuck.
-- during a game, you cannot pause by clicking down key and open the menu that we get after the game finishes.
+Current bugs: the code is working but there are some issues that need to be fixed. 
+- When playing with AI, it displays "you win" even if the AI wins. 
+
+Suggestions: 
+- Possibly add a "back button to navigate the menus"
 
 Input: Mouse and Key input in order to manage/play the game
 Output:
@@ -33,11 +34,12 @@ Date Created: 9/26/24
 (define ship-placement 4)
 (define in-play 5)
 (define game-over 6)
-(define help-screen 7) ; Added Help Screen State
+(define help-screen 7)
+(define pause-menu 8)
 
 ;; Declare Variables
 (define currentState home)
-(define previousState home)
+(define stateStack '()) ; Stack for state management
 (define num-ships 0)
 (define opponent-y-offset 50)
 (define player-y-offset 465)
@@ -57,17 +59,23 @@ Date Created: 9/26/24
 (define player1-special-shots 3)
 (define player2-special-shots 3)
 (define special-shot-active #f)
-(define special-shot-orientation 'row) ; Use for special shots
+(define special-shot-orientation 'horizontal) ; Use for special shots
 
 ;; AI State Variables
 (define ai-hit-cells '()) ; For medium AI tracking
 (define ai-target-cells '()) ; For medium AI targeting
 
+;; Variables to Track Total Ship Parts
+(define player1-total-ship-parts 0)
+(define player2-total-ship-parts 0)
+(define opponent-total-ship-parts 0)
+
 ;; Initialize a board with vectors using a given size
+;; Use symbols for cell states: 'empty, 'ship, 'hit, 'miss
 (define (createBoard size)
   (let ([board (make-vector size)])
     (for ([i (in-range size)])
-      (vector-set! board i (make-vector size #f)))
+      (vector-set! board i (make-vector size 'empty)))
     board))
 
 ;; Create boards/grids using the createBoard function
@@ -108,7 +116,7 @@ Date Created: 9/26/24
                  (+ y-offset (* i cellSize))
                  cellSize cellSize
                  #:fill #t)]
-          [(and (eq? cell #t) showShips)
+          [(and (eq? cell 'ship) showShips)
            (color 7)
            (rect (+ x-offset (* j cellSize))
                  (+ y-offset (* i cellSize))
@@ -158,7 +166,7 @@ Date Created: 9/26/24
                    (+ y-offset (* i cellSize))
                    cellSize cellSize
                    #:fill #t)]
-            [(and (eq? cell #t) showShips)
+            [(and (eq? cell 'ship) showShips)
              (color 7)
              (rect (+ x-offset (* j cellSize))
                    (+ y-offset (* i cellSize))
@@ -190,7 +198,6 @@ Date Created: 9/26/24
                 (+ y-offset (* i cellSize))
                 cellSize cellSize
                 #:fill #f)
-          
           ;; Handle cell state
           (let ([cell (vector-ref (vector-ref board i) j)])
             (cond
@@ -206,13 +213,12 @@ Date Created: 9/26/24
                      (+ y-offset (* i cellSize))
                      cellSize cellSize
                      #:fill #t)]
-              [(and (eq? cell #t) showShips)
+              [(and (eq? cell 'ship) showShips)
                (color 7)
                (rect (+ x-offset (* j cellSize))
                      (+ y-offset (* i cellSize))
                      cellSize cellSize
                      #:fill #t)]))
-          
           ;; Highlight the row or column for special shot
           (when (and special-shot-active board-pos)
             (if (eq? special-shot-orientation 'horizontal)
@@ -248,18 +254,18 @@ Date Created: 9/26/24
     [(eq? orientation 'horizontal)
      (and (<= (+ col size) boardSize)
           (for/and ([i (in-range size)])
-            (not (vector-ref (vector-ref board row) (+ col i)))))]
+            (eq? (vector-ref (vector-ref board row) (+ col i)) 'empty)))]
     [(eq? orientation 'vertical)
      (and (<= (+ row size) boardSize)
           (for/and ([i (in-range size)])
-            (not (vector-ref (vector-ref board (+ row i)) col))))]))
+            (eq? (vector-ref (vector-ref board (+ row i)) col) 'empty)))]))
 
 ;; Places a ship on the board
 (define (place-ship board row col size orientation)
   (for ([i (in-range size)])
     (if (eq? orientation 'horizontal)
-        (vector-set! (vector-ref board row) (+ col i) #t)
-        (vector-set! (vector-ref board (+ row i)) col #t)))
+        (vector-set! (vector-ref board row) (+ col i) 'ship)
+        (vector-set! (vector-ref board (+ row i)) col 'ship)))
   (set! ships-placed-locations (cons (list row col size orientation) ships-placed-locations)))
 
 ;; Places ships for the opponent (AI)
@@ -271,9 +277,7 @@ Date Created: 9/26/24
              [col (random boardSize)] ; Random column
              [orientation (if (zero? (random 2)) 'horizontal 'vertical)]) ; Random orientation
         (if (can-place-ship? opponentBoard row col size orientation) ; Check if placement is possible
-            (begin
-              (place-ship opponentBoard row col size orientation) ; Place the ship
-              (printf "Placed opponent ship of size ~a at row ~a, col ~a, orientation ~a~n" size row col orientation)) ; Debug output
+            (place-ship opponentBoard row col size orientation) ; Place the ship
             (loop)))))) ; Retry if placement is invalid
 
 ;; Removes the most recently added ship from the board
@@ -284,8 +288,8 @@ Date Created: 9/26/24
          (orientation (fourth ship)))
     (for ([i (in-range size)])
       (if (eq? orientation 'horizontal)
-          (vector-set! (vector-ref board row) (+ col i) #f)
-          (vector-set! (vector-ref board (+ row i)) col #f))))
+          (vector-set! (vector-ref board row) (+ col i) 'empty)
+          (vector-set! (vector-ref board (+ row i)) col 'empty))))
   (set! ships-placed-locations (rest ships-placed-locations)))
 
 ;; Randomly decide who starts the game first
@@ -306,16 +310,16 @@ Date Created: 9/26/24
 
 ;; Function to handle guessing a single cell
 (define (player-guess-cell board row col)
-  (cond
-    [(or (eq? (vector-ref (vector-ref board row) col) 'hit)
-         (eq? (vector-ref (vector-ref board row) col) 'miss))
-     (printf "Cell at ~a, ~a was already guessed.~n" row col)]
-    [(eq? (vector-ref (vector-ref board row) col) #t)
-     (vector-set! (vector-ref board row) col 'hit)
-     (printf "Hit at ~a, ~a!~n" row col)]
-    [else
-     (vector-set! (vector-ref board row) col 'miss)
-     (printf "Miss at ~a, ~a.~n" row col)]))
+  (let ([cell (vector-ref (vector-ref board row) col)])
+    (cond
+      [(or (eq? cell 'hit) (eq? cell 'miss))
+       (printf "Cell at ~a, ~a was already guessed.~n" row col)]
+      [(eq? cell 'ship)
+       (vector-set! (vector-ref board row) col 'hit)
+       (printf "Hit at ~a, ~a!~n" row col)]
+      [else
+       (vector-set! (vector-ref board row) col 'miss)
+       (printf "Miss at ~a, ~a.~n" row col)])))
 
 ;; Function to perform a special shot
 (define (player-special-shot board row col)
@@ -330,16 +334,13 @@ Date Created: 9/26/24
        (player-guess-cell board i col))]))
 
 ;; Function to check if the game is over (all ships are hit)
-(define (check-game-over board)
-  (let ([ship-part-count 0]
-        [hit-part-count 0])
+(define (check-game-over board total-ship-parts)
+  (let ([hit-part-count 0])
     (for ([row (in-vector board)])
       (for ([cell (in-vector row)])
-        (when (eq? cell #t)
-          (set! ship-part-count (+ ship-part-count 1)))
         (when (eq? cell 'hit)
           (set! hit-part-count (+ hit-part-count 1)))))
-    (and (> ship-part-count 0) (= ship-part-count hit-part-count))))
+    (= hit-part-count total-ship-parts)))
 
 ;; Function to get adjacent cells (for medium AI)
 (define (adjacent-cells row col)
@@ -364,7 +365,7 @@ Date Created: 9/26/24
          (if (or (eq? (vector-ref (vector-ref board row) col) 'hit)
                  (eq? (vector-ref (vector-ref board row) col) 'miss))
              (loop)
-             (if (eq? (vector-ref (vector-ref board row) col) #t)
+             (if (eq? (vector-ref (vector-ref board row) col) 'ship)
                  (begin
                    (vector-set! (vector-ref board row) col 'hit)
                    (printf "Opponent hit at ~a, ~a!~n" row col))
@@ -389,7 +390,7 @@ Date Created: 9/26/24
         (if (or (eq? (vector-ref (vector-ref board row) col) 'hit)
                 (eq? (vector-ref (vector-ref board row) col) 'miss))
             (opponent-guess-medium board) ; Cell already guessed, try next
-            (if (eq? (vector-ref (vector-ref board row) col) #t)
+            (if (eq? (vector-ref (vector-ref board row) col) 'ship)
                 (begin
                   (vector-set! (vector-ref board row) col 'hit)
                   (printf "Opponent hit at ~a, ~a!~n" row col)
@@ -406,7 +407,7 @@ Date Created: 9/26/24
           (if (or (eq? (vector-ref (vector-ref board row) col) 'hit)
                   (eq? (vector-ref (vector-ref board row) col) 'miss))
               (loop) ; Cell already guessed, try next
-              (if (eq? (vector-ref (vector-ref board row) col) #t)
+              (if (eq? (vector-ref (vector-ref board row) col) 'ship)
                   (begin
                     (vector-set! (vector-ref board row) col 'hit)
                     (printf "Opponent hit at ~a, ~a!~n" row col)
@@ -427,12 +428,29 @@ Date Created: 9/26/24
        (cond
          [(>= col boardSize) (loop (+ row 1) 0)] ; Move to next row
          [else
-          (if (and (eq? (vector-ref (vector-ref board row) col) #t)
+          (if (and (eq? (vector-ref (vector-ref board row) col) 'ship)
                    (not (eq? (vector-ref (vector-ref board row) col) 'hit)))
               (begin
                 (vector-set! (vector-ref board row) col 'hit)
                 (printf "Opponent hit at ~a, ~a!~n" row col))
               (loop row (+ col 1)))])])))
+
+;; Function to change state using a state stack
+(define (pushState newState)
+  (set! stateStack (cons currentState stateStack))
+  (set! currentState newState))
+
+(define (popState)
+  (when (not (null? stateStack))
+    (set! currentState (car stateStack))
+    (set! stateStack (cdr stateStack))))
+
+;; Function to approximate text centering horizontally
+(define (center-text x y width text-str)
+  (let* ((font-width (font-advance))
+         (text-length (* (string-length text-str) font-width))
+         (text-x (+ x (/ (- width text-length) 2))))
+    (text text-x y text-str)))
 
 ;; Game update function
 (define (update state)
@@ -441,40 +459,21 @@ Date Created: 9/26/24
          (mouseClicked (btn-mouse)))
     ;; Check for help key
     (when (btn-right)
-      (set! previousState currentState)
-      (set! currentState help-screen))
-    ;; Check for down arrow key during the game to go back to previous screen or open menu
-    (when (and (btn-down) (eq? currentState in-play))
-      (set! currentState home)
-      ;; Reset variables
-      (set! player1-board (createBoard boardSize))
-      (set! player2-board (createBoard boardSize))
-      (set! opponentBoard (createBoard boardSize))
-      (set! player1-ships-placed 0)
-      (set! player2-ships-placed 0)
-      (set! current-player 1)
-      (set! ships-placed-locations '())
-      (set! ship-orientation 'horizontal)
-      (set! player1-special-shots 3)
-      (set! player2-special-shots 3)
-      (set! special-shot-active #f)
-      (set! special-shot-orientation 'row)
-      ;; Reset AI state variables
-      (set! ai-hit-cells '())
-      (set! ai-target-cells '()))
+      (pushState help-screen))
     (cond
       ;; Help Screen State
       [(eq? currentState help-screen)
        ;; Return to previous state on mouse click
        (when mouseClicked
-         (set! currentState previousState))]
+         (popState))]
       ;; Home state - transition to game mode selection or exit
       [(eq? currentState home)
        ;; Start Game Button
        (when (and (mouse-in? mouseX mouseY 300 200 button-width button-height)
                   mouseClicked)
-         (set! previousState game-mode-selection)
-         (set! currentState game-mode-selection))
+         ;; Change to help screen
+         (pushState game-mode-selection)
+         (pushState help-screen))
        ;; Exit Button
        (when (and (mouse-in? mouseX mouseY 300 300 button-width button-height)
                   mouseClicked)
@@ -485,7 +484,7 @@ Date Created: 9/26/24
        (when (and (mouse-in? mouseX mouseY 300 200 button-width button-height)
                   mouseClicked)
          (set! game-mode '1-player-vs-ai)
-         (set! currentState select-ai-difficulty))
+         (pushState select-ai-difficulty))
        ;; 2-Player Button
        (when (and (mouse-in? mouseX mouseY 300 300 button-width button-height)
                   mouseClicked)
@@ -517,9 +516,9 @@ Date Created: 9/26/24
          (let ((option-y (+ 60 (* i 50))))
            (when (and (mouse-in? mouseX mouseY 350 option-y 100 40)
                       mouseClicked)
-             (set! currentState ship-placement)
              (set! num-ships (+ i 1))
-             (set! ship-sizes (reverse (build-list num-ships (lambda (i) (+ i 1))))))))
+             (set! ship-sizes (reverse (build-list num-ships (lambda (i) (+ i 1)))))
+             (set! currentState ship-placement))))
        ;; Error handling: Ensure at least one ship is selected
        (when (and mouseClicked (< num-ships 1))
          (printf "Please select at least one ship.~n"))]
@@ -545,21 +544,25 @@ Date Created: 9/26/24
        ;; Check if all ships are placed
        (when (= (if (= current-player 1) player1-ships-placed player2-ships-placed) num-ships)
          (if (= current-player 1)
-             (if (eq? game-mode '2-player)
-                 ;; Switch to Player 2 for ship placement
-                 (begin
-                   (set! current-player 2)
-                   (set! ships-placed-locations '())
-                   ;; Reset ship placement variables for Player 2
-                   (set! ship-orientation 'horizontal)
-                   (printf "Player 2, it's your turn to place ships.\n"))
-                 ;; For 1-player vs AI, proceed to start the game
-                 (begin
-                   (place-opponent-ships ship-sizes)
-                   (set! currentState in-play)
-                   (coinToss)))
+             (begin
+               (set! player1-total-ship-parts (apply + ship-sizes))
+               (if (eq? game-mode '2-player)
+                   ;; Switch to Player 2 for ship placement
+                   (begin
+                     (set! current-player 2)
+                     (set! ships-placed-locations '())
+                     ;; Reset ship placement variables for Player 2
+                     (set! ship-orientation 'horizontal)
+                     (printf "Player 2, it's your turn to place ships.\n"))
+                   ;; For 1-player vs AI, proceed to start the game
+                   (begin
+                     (place-opponent-ships ship-sizes)
+                     (set! opponent-total-ship-parts (apply + ship-sizes))
+                     (set! currentState in-play)
+                     (coinToss))))
              ;; After Player 2 places ships, start the game
              (begin
+               (set! player2-total-ship-parts (apply + ship-sizes))
                (set! currentState in-play)
                (coinToss))))
        ;; Revert Button
@@ -583,6 +586,9 @@ Date Created: 9/26/24
        ;; Toggle special shot orientation on LEFT arrow key press during special shot
        (when (and (btn-left) special-shot-active)
          (set! special-shot-orientation (if (eq? special-shot-orientation 'horizontal) 'vertical 'horizontal)))
+       ;; Check for down arrow key during the game to open pause menu
+       (when (btn-down)
+         (pushState pause-menu))
        ;; Player turn handling
        (cond
          ;; Player 1's turn
@@ -591,7 +597,8 @@ Date Created: 9/26/24
           (when mouseClicked
             (let ((board-pos (mouse-to-board mouseX mouseY x-offset opponent-y-offset)))
               (when board-pos
-                (let ((opponent-board (if (eq? game-mode '2-player) player2-board opponentBoard)))
+                (let ((opponent-board (if (eq? game-mode '2-player) player2-board opponentBoard))
+                      (opponent-total-parts (if (eq? game-mode '2-player) player2-total-ship-parts opponent-total-ship-parts)))
                   (if special-shot-active
                       (let* ((row (car board-pos))
                              (col (cdr board-pos)))
@@ -601,7 +608,7 @@ Date Created: 9/26/24
                         (set! player1-special-shots (- player1-special-shots 1))
                         (set! special-shot-active #f)
                         ;; Check if Player 1 has won
-                        (when (check-game-over opponent-board)
+                        (when (check-game-over opponent-board opponent-total-parts)
                           (printf "Player 1 wins! All opponent's ships are hit!~n")
                           (set! currentState game-over))
                         ;; Switch to Player 2's turn or AI's turn
@@ -617,7 +624,7 @@ Date Created: 9/26/24
                           (begin
                             (player-guess opponent-board mouseX mouseY)
                             ;; Check if Player 1 has won
-                            (when (check-game-over opponent-board)
+                            (when (check-game-over opponent-board opponent-total-parts)
                               (printf "Player 1 wins! All opponent's ships are hit!~n")
                               (set! currentState game-over))
                             ;; Switch to Player 2's turn or AI's turn
@@ -629,36 +636,37 @@ Date Created: 9/26/24
             (let ((board-pos (mouse-to-board mouseX mouseY x-offset opponent-y-offset)))
               (when board-pos
                 ;; Ensure Player 2 interacts with Player 1's board (top grid)
-                (if special-shot-active
-                    (let* ((row (car board-pos))
-                           (col (cdr board-pos)))
-                      ;; Apply special shot
-                      (player-special-shot player1-board row col)
-                      ;; Decrement special shots
-                      (set! player2-special-shots (- player2-special-shots 1))
-                      (set! special-shot-active #f)
-                      ;; Check if Player 2 has won
-                      (when (check-game-over player1-board)
-                        (printf "Player 2 wins! All Player 1's ships are hit!~n")
-                        (set! currentState game-over))
-                      ;; Switch back to Player 1's turn
-                      (set! playerTurn 1))
-                    ;; Else, normal shot
-                    (if (or (eq? (vector-ref (vector-ref player1-board (car board-pos))
-                                             (cdr board-pos))
-                                  'hit)
-                            (eq? (vector-ref (vector-ref player1-board (car board-pos))
-                                             (cdr board-pos))
-                                  'miss))
-                        (printf "Cell was already guessed. Try a different one!~n")
-                        (begin
-                          (player-guess player1-board mouseX mouseY)
-                          ;; Check if Player 2 has won
-                          (when (check-game-over player1-board)
-                            (printf "Player 2 wins! All Player 1's ships are hit!~n")
-                            (set! currentState game-over))
-                          ;; Switch back to Player 1's turn
-                          (set! playerTurn 1)))))))]
+                (let ((opponent-total-parts player1-total-ship-parts))
+                  (if special-shot-active
+                      (let* ((row (car board-pos))
+                             (col (cdr board-pos)))
+                        ;; Apply special shot
+                        (player-special-shot player1-board row col)
+                        ;; Decrement special shots
+                        (set! player2-special-shots (- player2-special-shots 1))
+                        (set! special-shot-active #f)
+                        ;; Check if Player 2 has won
+                        (when (check-game-over player1-board opponent-total-parts)
+                          (printf "Player 2 wins! All Player 1's ships are hit!~n")
+                          (set! currentState game-over))
+                        ;; Switch back to Player 1's turn
+                        (set! playerTurn 1))
+                      ;; Else, normal shot
+                      (if (or (eq? (vector-ref (vector-ref player1-board (car board-pos))
+                                               (cdr board-pos))
+                                    'hit)
+                              (eq? (vector-ref (vector-ref player1-board (car board-pos))
+                                               (cdr board-pos))
+                                    'miss))
+                          (printf "Cell was already guessed. Try a different one!~n")
+                          (begin
+                            (player-guess player1-board mouseX mouseY)
+                            ;; Check if Player 2 has won
+                            (when (check-game-over player1-board opponent-total-parts)
+                              (printf "Player 2 wins! All Player 1's ships are hit!~n")
+                              (set! currentState game-over))
+                            ;; Switch back to Player 1's turn
+                            (set! playerTurn 1))))))))]
          ;; AI's turn
          [(and (= playerTurn 0) (eq? game-mode '1-player-vs-ai))
           ;; AI's turn
@@ -666,23 +674,59 @@ Date Created: 9/26/24
             (printf "Opponent is taking its turn...\n")
             (opponent-guess player1-board)
             ;; Check if AI has won
-            (when (check-game-over player1-board)
+            (when (check-game-over player1-board player1-total-ship-parts)
               (printf "Opponent wins! All your ships are hit!~n")
-              (set! currentState 'game-over))
+              (set! currentState game-over))
             ;; Switch back to Player's turn if game not over
-            (unless (eq? currentState 'game-over)
+            (unless (eq? currentState game-over)
               (set! playerTurn 1)))]
          [else
           (printf "Invalid playerTurn or game-mode in in-play state.\n")])]
+      ;; Pause Menu State
+      [(eq? currentState pause-menu)
+       ;; Handle button clicks in pause menu
+       (when mouseClicked
+         (cond
+           ;; Resume Game Button
+           [(mouse-in? mouseX mouseY 300 400 button-width button-height)
+            ;; Return to the game
+            (popState)]
+           ;; Main Menu Button
+           [(mouse-in? mouseX mouseY 300 500 button-width button-height)
+            ;; Reset game variables and go to home
+            (set! player1-board (createBoard boardSize))
+            (set! player2-board (createBoard boardSize))
+            (set! opponentBoard (createBoard boardSize))
+            (set! player1-ships-placed 0)
+            (set! player2-ships-placed 0)
+            (set! current-player 1)
+            (set! ships-placed-locations '())
+            (set! ship-orientation 'horizontal)
+            (set! player1-special-shots 3)
+            (set! player2-special-shots 3)
+            (set! special-shot-active #f)
+            (set! special-shot-orientation 'horizontal)
+            ;; Reset AI state variables
+            (set! ai-hit-cells '())
+            (set! ai-target-cells '())
+            ;; Reset total ship parts
+            (set! player1-total-ship-parts 0)
+            (set! player2-total-ship-parts 0)
+            (set! opponent-total-ship-parts 0)
+            ;; Clear the state stack and set current state to home
+            (set! stateStack '())
+            (set! currentState home)]
+           ;; Exit Game Button
+           [(mouse-in? mouseX mouseY 300 600 button-width button-height)
+            (exit)]))]
       ;; Game Over State
-      [(eq? currentState 'game-over)
+      [(eq? currentState game-over)
        ;; Handle button clicks in game over state
        (when mouseClicked
          (cond
            ;; Main Menu Button
            [(mouse-in? mouseX mouseY 300 400 button-width button-height)
             ;; Reset game variables
-            (set! currentState home)
             (set! player1-board (createBoard boardSize))
             (set! player2-board (createBoard boardSize))
             (set! opponentBoard (createBoard boardSize))
@@ -694,14 +738,20 @@ Date Created: 9/26/24
             (set! player1-special-shots 3)
             (set! player2-special-shots 3)
             (set! special-shot-active #f)
-            (set! special-shot-orientation 'row)
+            (set! special-shot-orientation 'horizontal)
             ;; Reset AI state variables
             (set! ai-hit-cells '())
-            (set! ai-target-cells '())]
+            (set! ai-target-cells '())
+            ;; Reset total ship parts
+            (set! player1-total-ship-parts 0)
+            (set! player2-total-ship-parts 0)
+            (set! opponent-total-ship-parts 0)
+            ;; Clear the state stack and set current state to home
+            (set! stateStack '())
+            (set! currentState home)]
            ;; Restart Game Button
            [(mouse-in? mouseX mouseY 300 500 button-width button-height)
             ;; Reset game variables and start ship selection
-            (set! currentState ship-selection)
             (set! player1-board (createBoard boardSize))
             (set! player2-board (createBoard boardSize))
             (set! opponentBoard (createBoard boardSize))
@@ -713,20 +763,20 @@ Date Created: 9/26/24
             (set! player1-special-shots 3)
             (set! player2-special-shots 3)
             (set! special-shot-active #f)
-            (set! special-shot-orientation 'row)
+            (set! special-shot-orientation 'horizontal)
             ;; Reset AI state variables
             (set! ai-hit-cells '())
-            (set! ai-target-cells '())]
+            (set! ai-target-cells '())
+            ;; Reset total ship parts
+            (set! player1-total-ship-parts 0)
+            (set! player2-total-ship-parts 0)
+            (set! opponent-total-ship-parts 0)
+            ;; Clear the state stack and set current state to ship selection
+            (set! stateStack '())
+            (set! currentState ship-selection)]
            ;; Exit Game Button
            [(mouse-in? mouseX mouseY 300 600 button-width button-height)
             (exit)]))])))
-
-;; Function to approximate text centering horizontally
-(define (center-text x y width text-str)
-  (let* ((font-width (font-advance))
-         (text-length (* (string-length text-str) font-width))
-         (text-x (+ x (/ (- width text-length) 2))))
-    (text text-x y text-str)))
 
 ;; Function to Draw the State
 (define (draw state)
@@ -742,11 +792,33 @@ Date Created: 9/26/24
        (text 50 130 "2. During ship placement, click on the grid to place ships.")
        (text 50 160 "     - Press LEFT arrow to toggle ship orientation.")
        (text 50 190 "3. During your turn, click on the opponent's grid to attack.")
-       (text 50 220 "4. Press 'UP' arrow key to activate a special shot if available.")
+       (text 50 220 "4. Press UP arrow key to activate a special shot if available.")
        (text 50 250 "     - Special shot will target an entire row or column.")
        (text 50 280 "5. Press LEFT arrow to toggle between row and column.")
-       (text 50 310 "6. Press 'RIGHT' arrow key at any time to view this help screen.")
-       (text 50 340 "7. Press 'DOWN' arrow key at any time to go to the start menu.")]
+       (text 50 310 "6. Press RIGHT arrow key at any time to view this help screen.")
+       (text 50 340 "7. Press DOWN arrow key at any time to open the pause menu.")
+       (text 50 370 "Click anywhere to continue.")]
+      ;; Pause Menu
+      [(eq? currentState pause-menu)
+       (font wide-font)
+       (color 7)
+       (text 300 100 "Game Paused")
+       ;; Draw buttons
+       (color 7)
+       ;; Resume Game Button
+       (rect 300 400 button-width button-height #:fill #t)
+       (color 0)
+       (center-text 300 425 button-width "Resume Game")
+       ;; Main Menu Button
+       (color 7)
+       (rect 300 500 button-width button-height #:fill #t)
+       (color 0)
+       (center-text 300 525 button-width "Main Menu")
+       ;; Exit Game Button
+       (color 7)
+       (rect 300 600 button-width button-height #:fill #t)
+       (color 0)
+       (center-text 300 625 button-width "Exit Game")]
       ;; Draw Home Menu
       [(eq? currentState home)
        (color 7)
@@ -818,15 +890,6 @@ Date Created: 9/26/24
                                      0))
        ;; Draw the grid with highlighting
        (draw-grid-with-highlight x-offset y-offset current-board #t current-ship-size ship-orientation)
-       ;; Draw Start Game button after all ships placed for the current player
-       (when (and (= player1-ships-placed num-ships)
-           (or (and (eq? game-mode '1-player-vs-ai) (= current-player 1))
-               (and (eq? game-mode '2-player) (= current-player 2) (= player2-ships-placed num-ships))))
-
-         (color 7)
-         (rect 300 750 button-width button-height #:fill #t)
-         (color 0)
-         (center-text 300 775 button-width "Start Game"))
        ;; Draw Revert button
        (color 7)
        (rect 300 650 button-width button-height #:fill #t)
@@ -861,7 +924,7 @@ Date Created: 9/26/24
                  (draw-grid x-offset player-y-offset player2-board #t))
                ;; Opponent's turn (AI): show message
                (begin
-                 (text 330 10 "Opponent is thinking...")
+                 (text 330 10 "Opponent is taking its turn...")
                  (draw-grid x-offset opponent-y-offset player1-board #f)
                  (draw-grid x-offset player-y-offset player1-board #t))))]
       ;; Draw Game Over State
@@ -869,12 +932,15 @@ Date Created: 9/26/24
        (font wide-font)
        (color 7)
        (text 300 100 "Game Over!")
-       (text 300 200 (if (or (and (= playerTurn 1) (eq? game-mode '1-player-vs-ai))
-                             (and (= playerTurn 2) (eq? game-mode '2-player)))
-                         "You Lose!" "You Win!"))
+       (text 300 200
+             (cond
+               [(and (eq? game-mode '1-player-vs-ai) (= playerTurn 1)) "You Lose!"]
+               [(and (eq? game-mode '1-player-vs-ai) (= playerTurn 0)) "You Win!"]
+               [(and (eq? game-mode '2-player) (= playerTurn 1)) "Player 2 Wins!"]
+               [(and (eq? game-mode '2-player) (= playerTurn 2)) "Player 1 Wins!"]))
        ;; Draw buttons
        (color 7)
-       ;; Exit to Main Menu Button
+       ;; Main Menu Button
        (rect 300 400 button-width button-height #:fill #t)
        (color 0)
        (center-text 300 425 button-width "Main Menu")
@@ -899,3 +965,4 @@ Date Created: 9/26/24
      800 ; Width of the window
      900 ; Height of the window
      #:fps 60) ; Set the frame rate to 60 FPS
+
