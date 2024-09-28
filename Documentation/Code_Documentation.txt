@@ -68,18 +68,8 @@ Game Loop
 User Interaction
 
 -	Mouse clicks are used to select game modes, place ships, and make guesses. The functions mouse-in? and mouse-to-board handle the conversion of mouse events to game actions.
--	The game supports toggling ship orientation using the LEFT arrow key, which is handled during the
- 
-ship placement state.
+-	The game supports toggling ship orientation using the LEFT arrow key, which is handled during the ship placement state.
 
-
-Future Considerations
-
--	Game Modes: Add different AI difficulty levels or online multiplayer functionality.
-
--	Enhanced UI: Additional visual feedback during gameplay (e.g., highlighting possible ship placement, animating hits/misses).
--	Game State Management: Refactor game states into a more modular structure, possibly using a state pattern or event-driven model.
--	Scoring and Victory Conditions: Implement a detailed scoring system and more robust victory conditions.
 
 Detailed Function Descriptions createBoard(size)
 Creates a game board represented by a 2D vector of size `size`. Each cell in the board is initialized to #f, indicating an empty cell. The function returns this vector that represents the board.
@@ -154,5 +144,20 @@ Renders the game's visual elements based on the current state (`currentState`). 
 game-loop()
 
 The main loop of the game that is executed continuously. It calls the `update` function to process game state changes and the `draw` function to render the game visuals. Runs at a specified frame rate (60 FPS) to maintain smooth gameplay.
- 
 
+AI Difficulty Levels
+- opponent-guess-easy: random shots
+- opponent-guess-medium: randomly guesses shots until ship is hit, then starts hitting adjacent areas of found ship
+- opponent-guess-hard: know's player's ship locations
+ 
+Special Shot
+- Allows user to shoot an entire row or column
+- Toggled by using the UP arrow key
+
+Ship Highlighting
+- Highlight cells are used to make it more visually appealing when placing ships as well as when shooting a special shot, so that you can see exactly where you're placing
+
+Additional Info
+- Left arrow key can toggle orientation when placing ship as well as the special shot
+- Down arrow key will open the pause menu
+- Right arrow key will open up a help screen
